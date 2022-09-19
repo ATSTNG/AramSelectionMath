@@ -1,0 +1,491 @@
+<html>
+
+<head>
+    <link rel="stylesheet" type="text/css" href="main.css">
+    <title>League of Legends ARAM champion selection math & statistics</title>
+</head>
+
+<body>
+<div class="main_container">
+    <h2> League of Legends ARAM champion selection math & statistics </h2>
+    <div class="localization_link_container"><a href="index_ru.html">[RU] Switch to Russian</a></div>
+
+
+    <h3 id="general_information_title" class="expandable">General information about LoL ARAM <span class="title_hint" id="general_information_hint">[click to expand]</span></h3> 
+
+    <div id="general_information_container" style="display: none;">
+        <p>
+            <a href="https://leagueoflegends.fandom.com/wiki/ARAM">ARAM (or All Random All Mid)</a> is a game mode in League of Legends in a 5v5 format on the Howling Abyss map.
+            Two teams of five players each play against each other.
+            In the game each player controls a single champion, which is chosen in the game lobby before the game starts.
+            In this game mode players are given random champions from the available champion pool and are able to trade or reroll their picks.
+        </p>
+
+        <p>
+            When ARAM game lobby starts each player rolls a single champion. This champion is picked randomly from their own available champions.
+            Players' rolls processed sequentially.
+            Teams are blind to the picks of the opponents. Each champion in the game can only be rolled or rerolled into the game lobby at most once (across both teams).
+        </p>
+        <p>
+            Each player can store up to two reroll credits.
+            A player can consume reroll credit to reroll his champion.
+            Upon doing this he gets the new champion and the previous champion
+            is placed into the team's Available Champion Pool (a.k.a. the Bench).
+            Each team has their own bench. Any player can swap their champion with one from the bench if they own it or it is in Free champion rotation.
+        </p>
+        <p>
+            Each reroll credit is worth 250 reroll points (max 500 reroll points).
+            Reroll points are awarded to each player after each game. Exact value is based on amount of owned champions (formula: 65 + 1.5 x available champions).
+            Unused reroll points (reroll credits) are saved and carried to the next ARAM lobby.
+        </p>
+    </div>
+
+    <h3 id="article_purpose_title">Purpose</h3> 
+
+    <p>
+        Many players have doubts about ARAM champions distribution.
+        Champions seem to repeat too often, you are getting none of your favorite champions.
+        However the whole process is a bit more complicated than it might intuitively seem.
+        There are multiple cognitive biases that may strongly affect estimations:
+    </p>
+    
+    <p>
+        <span class="h_marker">Specific champion.</span> When you get Katarina 3 times in a row, you can think that this is very unlikely event.
+            But your feelings will not change much if you will get Shaco, Varus or Kai'Sa 3 times in a row.
+            Getting specific champion (like exactly Katarina) is different from getting the same champion. Later one is way more likely.
+    </p>
+
+    <p>
+        <span class="h_marker">Birthday paradox.</span> Let's say the game has a total pool of 161 champions. Also there are 10 champions that you like to play. 
+            Game lobby starts and your team rolls 10 champions to choose from. How likely that there will be at least one champion that you like playing? It's about 48%.
+            This is similar to <a href="https://en.wikipedia.org/wiki/Birthday_problem" target="_blank"> Birthday problem</a>.
+    </p>
+
+    <p>
+        <span class="h_marker">Repeated games.</span> People tend to pay more attention to specific events rather than to the whole process.
+        Playing just 3 games and getting Katarina in each
+        is less likely than playing 30 games and getting Katarina 3 times in a row once within these games.
+    </p>
+
+    <p>
+        This article is focused on building up the mathematical model to estimate probability of certain events based on equal probability for all champions.
+    </p>
+
+    <h3 id="approach_details_title" class="expandable">Approach and model details <span class="title_hint" id="approach_details_hint">[click to expand]</span></h3> 
+
+    <div id="approach_details_container" style="display: none;">
+        
+        <p>
+            Some assumptions of the model ordered by importance:
+        </p>
+
+        <ol>
+            <li>
+                First of all, this model assumes that all available champions have 
+                <span class="h_marker">equal probability</span> to be rolled whenever roll or reroll happens.
+            </li>
+
+            <li>
+                All players have the same fixed set (or subset) of champions available.
+                This allows to make all champions fungible and dismisses any aspects of champions popularity, 
+                champions availability, roll/reroll order.
+                Amount of available champions is one of the model parameters.
+            </li>
+
+            <li>
+                In the real game players will prefer to pick favorite or strong champions. This is hard to formalize.
+                In this model players will try to maximize the condition:
+                all players will try to pick the most played champion or most played in a row champion (at the moment).
+                Arguably, this is not how players behave in general, but this is definitely a valid formal strategy.
+                Also most played champions are generally the most strong and the most popular.
+                So we can say that players prefer to pick <span class="h_marker">the same</span> strong
+                and <span class="h_marker">the same</span> favorite champions.
+                For the first game in simulation players will have no preferences.
+            </li>
+
+            <li>
+                Players will not save rerolls for future games. All available rerolls will be used each game.
+                All players have equal amount of reroll points generated per game 
+                (because they have the same amount of available champions).
+                Amount of rerolls per game is one of the model parameters.
+            </li>
+
+            <li>
+                Rerolls per game can have a fractional value. In this case players will use whole number of rerolls
+                and leftover reroll points will be carried to the next game.
+                If there is more than one player in computation (team of 5 players),
+                then amount of rerolls is computed as the sum of rerolls of involved players.
+                You can think about it as the team's draft pool or bench size.
+                This reroll sum gets truncated to nearest whole number and leftover part is carried to the next games.
+                For example, with 1.5 rerolls per game total amount of rerolls for the team of 5 players
+                will alternate between 7 and 8 every two games.
+            </li>
+
+            <li>
+                Players will not dodge games (prevent games from starting by leaving game lobby).
+                Theoretically game dodges can be used as limitless source of pick improvement.
+                Real players can use this to cancel some unlucky drafts.
+            </li>
+
+            <li>
+                Players will not grief each other and will always freely swap champions.
+            </li>
+
+        </ol>
+
+        <p>
+            This model computes probability to "upgrade" champions through sequence of games,
+            where each game provides draft pool of random champions and subset of these champions is taken into upgrade pool.
+            Upgrading champion can have different means, most straightforward example is playing game with this champion. 
+            Size of draft pool and size of upgrade pool can vary.
+            Upgrades can persist through whole computation (playing X times in total) 
+            or can be reset after single non-upgraded game (playing X times in a row).
+        </p>
+
+        <p>
+            List of model parameters:
+        </p>
+
+        <ol>
+            <li>
+                total_games &mdash; total length of the game sequence to compute;
+            </li>
+            
+            <li>
+                total_champions &mdash; total amount of champions that can be drafted;
+            </li>
+            
+            <li>
+                target_streak &mdash; maximum number of upgrades that must be applied to a single champions to be counted as success;
+            </li>
+
+            <li>
+                draft_pool &mdash; size of the draft pool &mdash; number of randomly chosen champions that can be upgraded;
+            </li>
+
+            <li>
+                upgrade_pool &mdash; size of the upgrade pool &mdash; subset of drafted champions that will actually get an upgrade;
+            </li>
+
+            <li>
+                reset_on_failure &mdash; if true, amount of upgrades on a champion is reset to zero on non-upgraded game, 
+                otherwise number of upgrades persists.
+            </li>
+        </ol>
+
+        <p>
+            We have to calculate probabilities over sequences of events, where current decisions are based on previous choices.
+            Dynamic programming is the most straightforward way to do this.
+            Model will process games in the sequence one by one, 
+            while keeping track of all possible situations (states) that can be reached after current game.
+        </p>
+
+        <p>
+            States will be grouped into layers by amount of games played.
+            Number of games played can be referenced as implicit state argument.
+            Model will keep only two layers: layer of the current game and layer of the next game.
+        </p>
+
+        <p>
+            Of course keeping information about each champion is too wasteful.
+            Instead champions are grouped together by number of applied upgrades and size of each group is stored as a vector.
+            This vector is the dynamic programming state argument.
+            Dynamic programming state value is the probability to enter this state.
+        </p>
+
+        <p>
+            Dynamic programming transition is adding another game from current state.
+            This is done recursively. 
+            At each recursion step single group of champions is considered, starting from the most upgraded ones.
+            All possible ways to draft champions from this group are considered (all possible amounts).
+            For all further steps this group is champions is discarded (both drafted and not drafted champions).
+            When all groups of champions are considered transition state is finally complete.
+            Transition is complete and probability is added to state on the next layer.
+        </p>
+
+        <p>
+            Number of states and transitions is still exponential,
+            but the growth is capped by multiple parameters and optimizations.
+            When a state gets targeted amount of upgrades on at least one champion,
+            this probability is added to the result value and this state is not expanded further.
+            When a state or a transition branch has probability close to zero it immediately stops and is not expanded further.
+        </p>
+
+        <p>
+            Transitions are calculated independently for each state.
+        </p>
+
+        <p>
+            <a href="https://en.wikipedia.org/wiki/Hypergeometric_distribution">Hypergeometric distribution</a> 
+            is used to calculate probability split at each step of transition.
+            At this stage all champions are split into champions of current group and all other champions.
+            Given total amount of champions and size of current group, we want to compute probability 
+            that in equiprobably chosen subset of draft_pool champions there will be exactly X champions from current group.
+            Hypergeometric distribution is used on each recursion step and coefficients are multiplied for each group in the state.
+        </p>
+
+        <p>
+            This model is consistent in ARAM champion select mechanics with LoL patch 12.17.1.
+        </p>
+
+        <p>
+            This document was last updated at 19 September 2022.
+        </p>
+
+    </div>
+
+    <span id="s_comp_complete" class="localization_string">Computation complete for AAA champions, BBB rerolls per game (CCC ms, DDD states in peak, EEE transitions)</span>
+    <span id="s_comp_complete_b" class="localization_string">Computation complete for AAA champions (BBB ms)</span>
+    <span id="s_comp_in_progress" class="localization_string">Computation in progress...</span>
+    <span id="s_x_in_a_row" class="localization_string">AAA in a row</span>
+    <span id="s_x_in_total" class="localization_string">in AAA games</span>
+    <span id="s_x_games_played" class="localization_string">AAA games played</span>
+    <span id="s_x_champions" class="localization_string">AAA champions</span>
+    <span id="s_x_in_lobby_rerolls" class="localization_string">AAA in lobby (BBB rerolls)</span>
+    <span id="s_x" class="localization_string">AAA</span>
+
+    <h3>Parameters</h3>
+
+    <p>
+        Use the form below to change global parameters of all computations.
+    </p>
+
+    <p>
+        Amount of champions does not have to be equal to amount of champions in the game.
+        It can be lowered downto 65 to get more relevant information about low-level or special accounts.
+        Amount of rerolls is tied to amount of champions with formula: 65 + 1.5 x available champions.
+        But it also can be changed independently to get more relevant information about short sequence of games with special conditions.
+    </p>
+
+    <p>
+        The most reasonable scenarious to compute:
+    </p>
+
+    <ol>
+        <li>161 champions / 1.224 rerolls per game &mdash; all champions</li>
+        <li>124 champions / 1 rerolls per game &mdash; exaclty one reroll per game</li>
+        <li>100 champions / 0.86 rerolls per game &mdash; average accounts</li>
+        <li>75 champions / 0.71 rerolls per game &mdash; fresh accounts</li>
+    </ol>
+
+    <p>
+        Amount of champions must be integer (whole) number from range [65; 300]. Amount of rerolls must be real number from range [0; 2].
+        Entering any other values can lead to errors or extremely long and memory-demanding computations. If something goes wrong just reload the page.
+    </p>
+
+    <p>
+        <span id="control_form_status_label" class="model_status_label">Initializing scripts...</span>
+        <br>
+        Amount of champions: <input id="input_champions_total" value='161' type="text" size="5">
+        <br>
+        Amount of rerolls per game: <input id="input_rerolls_per_game" value='1.224' type="text" size="5">
+        <br>
+        <button id="recalculate_button" class="recalculate_button" disabled>Recalculate</button>
+    </p>
+
+    <h3>Results</h3> 
+
+    <p>Hover over table cells to get exact tooltips.</p>
+
+    <span id="s_title_b1" class="localization_string">AAA chance to get at least one of your BBB favorite champions out of CCC champions in the lobby</span>
+
+    <p><span class="s_marker">[B-1]</span>
+        Probability to get at least one of 
+        your <span class="h_marker">Y</span> favorite champions 
+        out of <span class="h_marker">X</span> champions in the lobby
+    </p>
+
+    <p>This is computed with simplier formula С(N - A, B) / C(N, B) without using the main model.</p>
+
+    <div class="table_container" id="table_favorite_champions">
+        <span class="model_status_label">Initializing scripts...</span>
+        <table>
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <span id="s_title_c1" class="localization_string">AAA chance to play against the same champion BBB games in a row in a total of CCC games (at least once)</span>
+
+    <p><span class="s_marker">[C-1]</span>
+        Probability to play against <span class="h_marker">the same</span> 
+        champion <span class="h_marker">Y</span> games <span class="h_marker">in a row</span> 
+        in a total of <span class="h_marker">X</span> games (at least once):
+    </p>
+
+    <div class="table_container" id="table_play_against_row">
+        <span class="model_status_label">Initializing scripts...</span>
+        <table>
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <span id="s_title_c2" class="localization_string">AAA chance to play against the same champion at least in BBB games in a total of CCC games</span>
+
+    <p><span class="s_marker">[C-2]</span>
+        Probability to play against <span class="h_marker">the same</span> 
+        champion at least in <span class="h_marker">Y</span> games 
+        in a total of <span class="h_marker">X</span> games:
+    </p>
+
+    <div class="table_container" id="table_play_against_sum">
+        <span class="model_status_label">Initializing scripts...</span>
+        <table>
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <span id="s_title_c3" class="localization_string">AAA chance to play as the same champion BBB games in a row in a total of CCC games (at least once)</span>
+
+    <p><span class="s_marker">[C-3]</span>
+        Probability to play as <span class="h_marker">the same</span> 
+        champion <span class="h_marker">Y</span> games <span class="h_marker">in a row</span> 
+        in a total of <span class="h_marker">X</span> games (at least once):
+    </p>
+
+    <div class="table_container" id="table_play_as_row">
+        <span class="model_status_label">Initializing scripts...</span>
+        <table>
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <span id="s_title_c4" class="localization_string">AAA chance to play as the same champion at least in BBB games in a total of CCC games</span>
+
+    <p><span class="s_marker">[C-4]</span>
+        Probability to play as <span class="h_marker">the same</span> 
+        champion at least in <span class="h_marker">Y</span> games 
+        in a total of <span class="h_marker">X</span> games:
+    </p>
+
+    <div class="table_container" id="table_play_as_sum">
+        <span class="model_status_label">Initializing scripts...</span>
+        <table>
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <span id="s_title_c5" class="localization_string">AAA chance to roll/reroll by yourself the same champion BBB games in a row in a total of CCC games (at least once)</span>
+
+    <p><span class="s_marker">[C-5]</span>
+        Probability to roll/reroll by yourself <span class="h_marker">the same</span> 
+        champion <span class="h_marker">Y</span> games <span class="h_marker">in a row</span> 
+        in a total of <span class="h_marker">X</span> games (at least once):
+    </p>
+
+    <p>This is computed for one player.</p>
+
+    <div class="table_container" id="table_roll_row">
+        <span class="model_status_label">Initializing scripts...</span>
+        <table>
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <span id="s_title_c6" class="localization_string">AAA chance to roll/reroll by yourself the same champion at least in BBB games in a total of CCC games</span>
+
+    <p><span class="s_marker">[C-6]</span>
+        Probability to roll/reroll by yourself <span class="h_marker">the same</span> 
+        champion at least in <span class="h_marker">Y</span> games 
+        in a total of <span class="h_marker">X</span> games:
+    </p>
+
+    
+    <p>This is computed for one player.</p>
+
+    <div class="table_container" id="table_roll_sum">
+        <span class="model_status_label">Initializing scripts...</span>
+        <table>
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <span id="s_title_c7" class="localization_string">AAA chance to roll/reroll by yourself and play as the same champion BBB games in a row in a total of CCC games (at least once)</span>
+
+    <p><span class="s_marker">[C-7]</span>
+        Probability to roll/reroll by yourself and play as <span class="h_marker">the same</span> 
+        champion <span class="h_marker">Y</span> games <span class="h_marker">in a row</span> 
+        in a total of <span class="h_marker">X</span> games (at least once):
+    </p>
+
+    <p>This is computed for one player.</p>
+
+    <div class="table_container" id="table_roll_and_play_row">
+        <span class="model_status_label">Initializing scripts...</span>
+        <table>
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <span id="s_title_c8" class="localization_string">AAA chance to roll/reroll by yourself and play as the same champion at least in BBB games in a total of CCC games</span>
+
+    <p><span class="s_marker">[C-8]</span>
+        Probability to roll/reroll by yourself and play as <span class="h_marker">the same</span> 
+        champion at least in <span class="h_marker">Y</span> games 
+        in a total of <span class="h_marker">X</span> games:
+    </p>
+
+    <p>This is computed for one player.</p>
+
+    <div class="table_container" id="table_roll_and_play_sum">
+        <span class="model_status_label">Initializing scripts...</span>
+        <table>
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <span id="s_title_c9" class="localization_string">AAA chance to just get and play as the same champion BBB games in a row in a total of CCC games (at least once)</span>
+
+    <p><span class="s_marker">[C-9]</span>
+        Probability to just get and play as <span class="h_marker">the same</span> 
+        champion <span class="h_marker">Y</span> games <span class="h_marker">in a row</span> 
+        in a total of <span class="h_marker">X</span> games (at least once):
+    </p>
+
+    <p>
+        This is computed for one player. Rerolls and champion exchanges are not counted for this.
+    </p>
+
+    <div class="table_container" id="table_pure_random_row">
+        <span class="model_status_label">Initializing scripts...</span>
+        <table>
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <span id="s_title_c10" class="localization_string">AAA chance to just get and play as the same champion at least in BBB games in a total of CCC games</span>
+
+    <p><span class="s_marker">[C-10]</span>
+        Probability to just get and play as <span class="h_marker">the same</span> 
+        champion at least in <span class="h_marker">Y</span> games 
+        in a total of <span class="h_marker">X</span> games:
+    </p>
+
+    <p>
+        This is computed for one player. Rerolls and champion exchanges are not counted for this.
+    </p>
+
+    <div class="table_container" id="table_pure_random_sum">
+        <span class="model_status_label">Initializing scripts...</span>
+        <table>
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+</div>
+
+<script type="text/javascript" src="main.js"></script>
+
+</body>
+
+</html>
