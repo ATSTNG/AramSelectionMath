@@ -431,7 +431,7 @@ class ChampionSelectionDocument {
                     col: 'x_in_total',
                     cell_title: 'title_c2',
                 },
-                5, /* max_streak */
+                4, /* max_streak */
                 5, /* draft_pool_fixed */
                 5, /* draft_pool_reroll_coef */
             ),
